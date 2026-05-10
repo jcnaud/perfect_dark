@@ -954,9 +954,10 @@ void netPlayersAllocate(void)
 {
 	s32 playernum = 0;
 
-	if (g_NetMode == NETMODE_CLIENT) {
-		// we always put the local player at index 0, even client-side
-		// which means that clientside we have to put the server's player into our slot
+	if (g_NetMode == NETMODE_CLIENT && g_Vars.coopplayernum < 0) {
+		// in combat sim, always put the local player at index 0 client-side,
+		// swapping with the server player; in co-op we keep the server-assigned
+		// slots so bond stays 0 and coop stays 1
 		const s32 svplayernum = g_NetLocalClient->playernum;
 		g_NetLocalClient->playernum = 0;
 		g_NetClients[0].playernum = svplayernum;
@@ -997,6 +998,12 @@ void netPlayersAllocate(void)
 			cl->player->client = cl;
 			cl->player->isremote = (cl != g_NetLocalClient);
 		}
+
+		// in network co-op the client controls the coop buddy with the primary controller
+		if (cl == g_NetLocalClient && g_NetMode == NETMODE_CLIENT && g_Vars.coopplayernum >= 0) {
+			cl->config->contpad1 = 0;
+			cl->config->contpad2 = 2;
+		}
 	}
 }
 
@@ -1030,9 +1037,9 @@ void netSyncIdsAllocate(void)
 		prop = prop->next;
 	}
 
-	// HACK: when we're a client, we'll need to swap our player and server player's props
-	// because of what we do in netPlayersAllocate
-	if (g_NetMode == NETMODE_CLIENT) {
+	// in combat sim, swap our prop syncid with the server player's because of the
+	// player index swap in netPlayersAllocate; in co-op slots are kept as-is
+	if (g_NetMode == NETMODE_CLIENT && g_Vars.coopplayernum < 0) {
 		if (!g_NetLocalClient->player || !g_NetLocalClient->player->prop) {
 			sysLogPrintf(LOG_ERROR, "NET: no props allocated for players?");
 			netDisconnect();

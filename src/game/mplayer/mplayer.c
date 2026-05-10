@@ -291,13 +291,19 @@ void mpReset(void)
 	{
 		struct mpplayerconfig tmp;
 
-		tmp = g_PlayerConfigsArray[MAX_PLAYERS];
-		g_PlayerConfigsArray[MAX_PLAYERS] = g_PlayerConfigsArray[0];
-		g_PlayerConfigsArray[0] = tmp;
+#ifndef PLATFORM_N64
+		// network co-op: configs are already set up by netPlayersAllocate, skip swap
+		if (!g_NetMode)
+#endif
+		{
+			tmp = g_PlayerConfigsArray[MAX_PLAYERS];
+			g_PlayerConfigsArray[MAX_PLAYERS] = g_PlayerConfigsArray[0];
+			g_PlayerConfigsArray[0] = tmp;
 
-		tmp = g_PlayerConfigsArray[MAX_PLAYERS + 1];
-		g_PlayerConfigsArray[MAX_PLAYERS + 1] = g_PlayerConfigsArray[1];
-		g_PlayerConfigsArray[1] = tmp;
+			tmp = g_PlayerConfigsArray[MAX_PLAYERS + 1];
+			g_PlayerConfigsArray[MAX_PLAYERS + 1] = g_PlayerConfigsArray[1];
+			g_PlayerConfigsArray[1] = tmp;
+		}
 
 		// Player index 0
 		g_Vars.playerstats[0].mpindex = 0;
@@ -324,6 +330,14 @@ void mpReset(void)
 		} else {
 			g_PlayerConfigsArray[1].base.displayoptions &= ~MPDISPLAYOPTION_RADAR;
 		}
+
+#ifndef PLATFORM_N64
+		// in network co-op the client controls the coop buddy with the primary controller
+		if (g_NetMode == NETMODE_CLIENT && g_NetLocalClient) {
+			g_PlayerConfigsArray[g_NetLocalClient->playernum].contpad1 = 0;
+			g_PlayerConfigsArray[g_NetLocalClient->playernum].contpad2 = 2;
+		}
+#endif
 
 		g_MpNumChrs = 2;
 	} else {

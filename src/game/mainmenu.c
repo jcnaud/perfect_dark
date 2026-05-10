@@ -734,6 +734,12 @@ MenuItemHandlerResult menuhandlerAcceptMission(s32 operation, struct menuitem *i
 		titleSetNextStage(g_MissionConfig.stagenum);
 
 		if (g_MissionConfig.iscoop) {
+#ifndef PLATFORM_N64
+			// network co-op server always uses a human buddy (the remote client)
+			if (g_NetMode == NETMODE_SERVER) {
+				g_Vars.numaibuddies = 0;
+			}
+#endif
 			if (g_Vars.numaibuddies == 0) {
 				// Coop with human buddy
 				g_Vars.bondplayernum = 0;

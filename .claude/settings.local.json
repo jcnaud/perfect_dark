@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(& \"C:\\\\msys64\\\\usr\\\\bin\\\\bash.exe\" -lc \"cd /d/var/github.com/fgsfdsfgs/perfect_dark/build && make VERBOSE=1 2>&1 | grep playermgr\")",
+      "PowerShell(& \"C:\\\\msys64\\\\usr\\\\bin\\\\bash.exe\" -lc \"C:/msys64/mingw64/bin/cc.exe -DAVOID_UB=1 -DMATCHING=0 -DPAL=0 -DPIRACYCHECKS=0 -DPLATFORM_64BIT=1 -DROM_SIZE=32 -DVERSION=2 -D_LANGUAGE_C=1 -I/d/var/github.com/fgsfdsfgs/perfect_dark/build -I/d/var/github.com/fgsfdsfgs/perfect_dark/port/include -I/d/var/github.com/fgsfdsfgs/perfect_dark/src/include -I/d/var/github.com/fgsfdsfgs/perfect_dark/src -I/d/var/github.com/fgsfdsfgs/perfect_dark/src/lib -I/d/var/github.com/fgsfdsfgs/perfect_dark -O2 -g -std=c11 -include /d/var/github.com/fgsfdsfgs/perfect_dark/build/port/include/versioninfo.h -c /d/var/github.com/fgsfdsfgs/perfect_dark/src/game/playermgr.c -o /tmp/playermgr.o 2>&1\")"
+    ]
+  }
+}

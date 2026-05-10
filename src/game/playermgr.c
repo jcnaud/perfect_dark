@@ -82,6 +82,12 @@ void playermgrAllocatePlayers(s32 count)
 #endif
 
 		setCurrentPlayerNum(0);
+#ifndef PLATFORM_N64
+		// in network co-op the client controls the coop buddy, not bond
+		if (g_NetMode == NETMODE_CLIENT && g_NetLocalClient && g_Vars.coopplayernum >= 0) {
+			setCurrentPlayerNum(g_NetLocalClient->playernum);
+		}
+#endif
 		g_Vars.bond = g_Vars.players[g_Vars.bondplayernum];
 
 		if (g_Vars.coopplayernum >= 0) {
@@ -837,6 +843,14 @@ void playermgrShuffle(void)
 	if (g_NetMode) {
 		// don't shuffle in netgames
 		// why is this a thing anyway?
+		if (g_NetMode == NETMODE_CLIENT && g_NetLocalClient && g_Vars.coopplayernum >= 0) {
+			// put the local client's player slot first so the render loop cameras onto them
+			s32 localslot = g_NetLocalClient->playernum;
+			if (localslot != 0) {
+				g_Vars.playerorder[0] = localslot;
+				g_Vars.playerorder[localslot] = 0;
+			}
+		}
 		return;
 	}
 #endif

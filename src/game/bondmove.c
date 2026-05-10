@@ -903,7 +903,7 @@ void bmoveProcessInput(bool allowc1x, bool allowc1y, bool allowc1buttons, bool i
 	f32 newverta;
 #ifndef PLATFORM_N64
 	const f32 mlookscale = g_Vars.lvupdate240 ? (4.f / (f32)g_Vars.lvupdate240) : 4.f;
-	const bool allowmlook = (g_Vars.currentplayernum == 0) && (allowc1x || allowc1y);
+	const bool allowmlook = (g_Vars.currentplayernum == 0 || (g_NetMode && !g_Vars.currentplayer->isremote)) && (allowc1x || allowc1y);
 	bool allowmcross = false;
 #endif
 

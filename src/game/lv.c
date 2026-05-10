@@ -1763,6 +1763,9 @@ Gfx *lvRender(Gfx *gdl)
 #else
 					&& ((g_InCutscene && !g_MainIsEndscreen) || menuGetRoot() == MENUROOT_COOPCONTINUE)
 #endif
+#ifndef PLATFORM_N64
+					&& !g_NetMode
+#endif
 					&& g_Vars.currentplayernum != 0) {
 				gdl = savedgdl;
 			}

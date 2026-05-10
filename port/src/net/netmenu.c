@@ -5,6 +5,7 @@
 #include <PR/ultratypes.h>
 #include "platform.h"
 #include "data.h"
+#include "bss.h"
 #include "types.h"
 #include "game/mainmenu.h"
 #include "game/menu.h"
@@ -17,12 +18,14 @@
 #include "net/net.h"
 
 extern MenuItemHandlerResult menuhandlerMainMenuCombatSimulator(s32 operation, struct menuitem *item, union handlerdata *data);
+extern MenuItemHandlerResult menuhandlerMainMenuCooperative(s32 operation, struct menuitem *item, union handlerdata *data);
 extern MenuItemHandlerResult menuhandlerMpAdvancedSetup(s32 operation, struct menuitem *item, union handlerdata *data);
 extern struct menuitem g_MpPlayerSetup234MenuItems[];
 extern struct menudialogdef g_NetJoinPlayerSetupMenuDialog;
 
 static s32 g_NetMenuMaxPlayers = NET_MAX_CLIENTS;
 static s32 g_NetMenuPort = NET_DEFAULT_PORT;
+static s32 g_NetMenuIsCoop = 0;
 static char g_NetJoinAddr[NET_MAX_ADDR + 1];
 static s32 g_NetJoinAddrPtr = 0;
 
@@ -60,15 +63,34 @@ static char *menuhandlerHostPortValue(struct menuitem *item)
 	return tmp;
 }
 
+static char *menuhandlerHostModeValue(struct menuitem *item)
+{
+	return g_NetMenuIsCoop ? "Co-op\n" : "Combat Sim\n";
+}
+
+static MenuItemHandlerResult menuhandlerHostMode(s32 operation, struct menuitem *item, union handlerdata *data)
+{
+	if (operation == MENUOP_SET) {
+		g_NetMenuIsCoop = !g_NetMenuIsCoop;
+	}
+	return 0;
+}
+
 MenuItemHandlerResult menuhandlerHostStart(s32 operation, struct menuitem *item, union handlerdata *data)
 {
 	if (operation == MENUOP_SET) {
 		if (netStartServer(g_NetMenuPort, g_NetMenuMaxPlayers) == 0) {
-			// load the setup file when entering the Combat Simulator
-			mpsetupCopyAllFromPak();
-			mpsetupLoadCurrentFile();
-			menuhandlerMainMenuCombatSimulator(MENUOP_SET, NULL, NULL);
-			menuhandlerMpAdvancedSetup(MENUOP_SET, NULL, NULL);
+			if (g_NetMenuIsCoop) {
+				// network co-op always uses a human buddy (player 1 is the remote client)
+				g_Vars.numaibuddies = 0;
+				menuhandlerMainMenuCooperative(MENUOP_SET, NULL, NULL);
+			} else {
+				// load the setup file when entering the Combat Simulator
+				mpsetupCopyAllFromPak();
+				mpsetupLoadCurrentFile();
+				menuhandlerMainMenuCombatSimulator(MENUOP_SET, NULL, NULL);
+				menuhandlerMpAdvancedSetup(MENUOP_SET, NULL, NULL);
+			}
 		}
 	}
 
@@ -91,6 +113,14 @@ struct menuitem g_NetHostMenuItems[] = {
 		(uintptr_t)"Port\n",
 		(uintptr_t)&menuhandlerHostPortValue,
 		menuhandlerHostPort,
+	},
+	{
+		MENUITEMTYPE_SELECTABLE,
+		0,
+		MENUITEMFLAG_LITERAL_TEXT,
+		(uintptr_t)"Mode:      \n",
+		(uintptr_t)&menuhandlerHostModeValue,
+		menuhandlerHostMode,
 	},
 	{
 		MENUITEMTYPE_SELECTABLE,

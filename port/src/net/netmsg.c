@@ -424,14 +424,20 @@ u32 netmsgSvcStageStartWrite(struct netbuf *dst)
 	}
 
 	// game settings
-	netbufWriteU8(dst, 0); // 0 for combat sim TODO: coop/anti
-	netbufWriteU8(dst, g_MpSetup.scenario);
-	netbufWriteU8(dst, g_MpSetup.scorelimit);
-	netbufWriteU8(dst, g_MpSetup.timelimit);
-	netbufWriteU16(dst, g_MpSetup.teamscorelimit);
-	netbufWriteU16(dst, g_MpSetup.chrslots);
-	netbufWriteU32(dst, g_MpSetup.options);
-	netbufWriteData(dst, g_MpSetup.weapons, sizeof(g_MpSetup.weapons));
+	if (g_MissionConfig.iscoop) {
+		netbufWriteU8(dst, 1); // coop mode
+		netbufWriteU8(dst, g_MissionConfig.stageindex);
+		netbufWriteU8(dst, g_MissionConfig.difficulty);
+	} else {
+		netbufWriteU8(dst, 0); // combat sim
+		netbufWriteU8(dst, g_MpSetup.scenario);
+		netbufWriteU8(dst, g_MpSetup.scorelimit);
+		netbufWriteU8(dst, g_MpSetup.timelimit);
+		netbufWriteU16(dst, g_MpSetup.teamscorelimit);
+		netbufWriteU16(dst, g_MpSetup.chrslots);
+		netbufWriteU32(dst, g_MpSetup.options);
+		netbufWriteData(dst, g_MpSetup.weapons, sizeof(g_MpSetup.weapons));
+	}
 
 	// who the fuck is in the game
 	netbufWriteU8(dst, g_NetNumClients);
@@ -479,16 +485,39 @@ u32 netmsgSvcStageStartRead(struct netbuf *src, struct netclient *srccl)
 		return src->error;
 	}
 
-	const u8 mode = netbufReadU8(src); // TODO: coop, anti
-	g_MpSetup.stagenum = stagenum;
-	g_MpSetup.scenario = netbufReadU8(src);
-	g_MpSetup.scorelimit = netbufReadU8(src);
-	g_MpSetup.timelimit = netbufReadU8(src);
-	g_MpSetup.teamscorelimit = netbufReadU16(src);
-	g_MpSetup.chrslots = netbufReadU16(src);
-	g_MpSetup.options = netbufReadU32(src);
-	netbufReadData(src, g_MpSetup.weapons, sizeof(g_MpSetup.weapons));
-	strcpy(g_MpSetup.name, "server");
+	const u8 mode = netbufReadU8(src);
+	if (mode == 1) {
+		// co-op mission mode
+		const u8 stageindex = netbufReadU8(src);
+		const u8 difficulty = netbufReadU8(src);
+		g_MissionConfig.iscoop = true;
+		g_MissionConfig.isanti = false;
+		g_MissionConfig.stagenum = stagenum;
+		g_MissionConfig.stageindex = stageindex;
+		g_MissionConfig.difficulty = difficulty;
+		g_Vars.bondplayernum = 0;
+		g_Vars.coopplayernum = 1;
+		g_Vars.antiplayernum = -1;
+		// mpStartMatch reads stagenum and chrslots from g_MpSetup
+		g_MpSetup.stagenum = stagenum;
+		g_MpSetup.chrslots = 0x3; // 2 players: bond (0) + coop (1)
+		strcpy(g_MpSetup.name, "server");
+	} else {
+		// combat sim mode
+		g_MissionConfig.iscoop = false;
+		g_MissionConfig.isanti = false;
+		g_Vars.coopplayernum = -1;
+		g_Vars.antiplayernum = -1;
+		g_MpSetup.stagenum = stagenum;
+		g_MpSetup.scenario = netbufReadU8(src);
+		g_MpSetup.scorelimit = netbufReadU8(src);
+		g_MpSetup.timelimit = netbufReadU8(src);
+		g_MpSetup.teamscorelimit = netbufReadU16(src);
+		g_MpSetup.chrslots = netbufReadU16(src);
+		g_MpSetup.options = netbufReadU32(src);
+		netbufReadData(src, g_MpSetup.weapons, sizeof(g_MpSetup.weapons));
+		strcpy(g_MpSetup.name, "server");
+	}
 
 	if (src->error) {
 		sysLogPrintf(LOG_WARNING, "NET: malformed SVC_STAGE from server");
