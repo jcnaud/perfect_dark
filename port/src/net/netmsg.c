@@ -462,6 +462,13 @@ u32 netmsgSvcStageStartWrite(struct netbuf *dst)
 		}
 	}
 
+	// send prop syncid table so client can adopt server syncids
+	netbufWriteU32(dst, g_NetNextSyncId);
+	netbufWriteU32(dst, (u32)g_Vars.maxprops);
+	for (s32 i = 0; i < g_Vars.maxprops; ++i) {
+		netbufWriteU32(dst, g_Vars.props[i].syncid);
+	}
+
 	return dst->error;
 }
 
@@ -591,7 +598,21 @@ u32 netmsgSvcStageStartRead(struct netbuf *src, struct netclient *srccl)
 	mpStartMatch();
 	menuStop();
 
-	return 0;
+	// adopt server prop syncid table so both sides have matching syncids
+	const u32 server_next_syncid = netbufReadU32(src);
+	const u32 server_maxprops = netbufReadU32(src);
+	for (u32 i = 0; i < server_maxprops && !src->error; ++i) {
+		const u32 sid = netbufReadU32(src);
+		if (i < (u32)g_Vars.maxprops) {
+			g_Vars.props[i].syncid = sid;
+		}
+	}
+	if (!src->error) {
+		g_NetNextSyncId = server_next_syncid;
+		sysLogPrintf(LOG_NOTE, "NET: applied server syncid table, next syncid: %u", g_NetNextSyncId);
+	}
+
+	return src->error;
 }
 
 u32 netmsgSvcStageEndWrite(struct netbuf *dst)
@@ -865,6 +886,23 @@ u32 netmsgSvcPropMoveRead(struct netbuf *src, struct netclient *srccl)
 	RoomNum rooms[8] = { -1 }; netbufReadRooms(src, rooms, ARRAYCOUNT(rooms));
 
 	if (src->error || !prop) {
+		// consume remaining data to keep the buffer in sync even if prop is unknown
+		if (!src->error && (flags & (1 << 1))) {
+			struct coord tmp;
+			netbufReadCoord(src, &tmp);
+			netbufReadF32(src);
+			netbufReadU32(src);
+			netbufReadS8(src);
+			netbufReadU32(src); // ownerprop syncid (raw, skip warning)
+			netbufReadU32(src); // targetprop syncid (raw, skip warning)
+			if (flags & (1 << 2)) {
+				netbufReadCoord(src, &tmp);
+			}
+			if (flags & (1 << 3)) {
+				netbufReadF32(src); netbufReadF32(src); netbufReadF32(src);
+				netbufReadF32(src); netbufReadF32(src); netbufReadF32(src);
+			}
+		}
 		return src->error;
 	}
 
@@ -1606,6 +1644,71 @@ u32 netmsgSvcChrDisarmRead(struct netbuf *src, struct netclient *srccl)
 	bgunEquipWeapon2(HAND_LEFT, WEAPON_NONE);
 
 	setCurrentPlayerNum(prevplayernum);
+
+	return src->error;
+}
+
+u32 netmsgSvcChrPositionsWrite(struct netbuf *dst)
+{
+	s32 count = 0;
+	for (s32 i = 0; i < g_NumChrs; ++i) {
+		struct chrdata *chr = &g_ChrSlots[g_ChrIndexes[i]];
+		if (chr->prop && chr->prop->type == PROPTYPE_CHR) {
+			++count;
+		}
+	}
+	if (count == 0) {
+		return dst->error;
+	}
+
+	netbufWriteU8(dst, SVC_CHR_POSITIONS);
+	netbufWriteU8(dst, (u8)count);
+
+	for (s32 i = 0; i < g_NumChrs; ++i) {
+		struct chrdata *chr = &g_ChrSlots[g_ChrIndexes[i]];
+		if (chr->prop && chr->prop->type == PROPTYPE_CHR) {
+			f32 angle = 0.f;
+			if (chr->aibot) {
+				angle = chr->aibot->lookangle;
+			} else if (chr->model) {
+				angle = modelGetChrRotY(chr->model);
+			}
+			netbufWriteS16(dst, g_Chrnums[i]);
+			netbufWriteCoord(dst, &chr->prop->pos);
+			netbufWriteF32(dst, angle);
+			netbufWriteF32(dst, chr->damage);
+		}
+	}
+
+	return dst->error;
+}
+
+u32 netmsgSvcChrPositionsRead(struct netbuf *src, struct netclient *srccl)
+{
+	const u8 count = netbufReadU8(src);
+
+	for (u8 i = 0; i < count && !src->error; ++i) {
+		const s16 chrnum = netbufReadS16(src);
+		struct coord pos;
+		netbufReadCoord(src, &pos);
+		const f32 angle = netbufReadF32(src);
+		const f32 damage = netbufReadF32(src);
+
+		if (src->error) {
+			break;
+		}
+
+		struct chrdata *chr = chrFindByLiteralId(chrnum);
+		if (chr && chr->prop) {
+			chr->prop->pos = pos;
+			if (chr->aibot) {
+				chr->aibot->lookangle = angle;
+			} else if (chr->model) {
+				modelSetChrRotY(chr->model, angle);
+			}
+			chr->damage = damage;
+		}
+	}
 
 	return src->error;
 }

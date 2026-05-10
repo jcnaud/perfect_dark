@@ -891,7 +891,7 @@ s32 botTick(struct prop *prop)
 	updateable = (prop->flags & PROPFLAG_NOTYETTICKED) && g_Vars.lvupdate240;
 
 	if (aibot) {
-		if (updateable && g_Vars.lvframe60 >= 145) {
+		if (updateable && g_Vars.lvframe60 >= 145 && g_NetMode != NETMODE_CLIENT) {
 			botTickUnpaused(chr);
 
 			// Calculate cheap
@@ -1044,7 +1044,9 @@ s32 botTick(struct prop *prop)
 			}
 		}
 
-		botApplyMovement(chr);
+		if (g_NetMode != NETMODE_CLIENT) {
+			botApplyMovement(chr);
+		}
 
 		result = chrTick(prop);
 

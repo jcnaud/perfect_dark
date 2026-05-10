@@ -13371,7 +13371,9 @@ void chraTick(struct chrdata *chr)
 		u8 pass = race == RACE_HUMAN || race == RACE_SKEDAR;
 		chr->sleep = 0;
 
-		chraiExecute(chr, PROPTYPE_CHR);
+		if (g_NetMode != NETMODE_CLIENT) {
+			chraiExecute(chr, PROPTYPE_CHR);
+		}
 
 		// Consider setting shootingatmelist
 		if (chr->prop) {

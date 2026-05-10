@@ -21,8 +21,9 @@
 #define SVC_PROP_USE      0x34 // door/lift/etc was used
 #define SVC_PROP_DOOR     0x35 // door state changed
 #define SVC_PROP_LIFT     0x36 // lift state changed
-#define SVC_CHR_DAMAGE    0x42 // chr was damaged
-#define SVC_CHR_DISARM    0x43 // chr's weapons were dropped
+#define SVC_CHR_DAMAGE     0x42 // chr was damaged
+#define SVC_CHR_DISARM     0x43 // chr's weapons were dropped
+#define SVC_CHR_POSITIONS  0x44 // chr (bot/AI) positions, server authoritative
 
 #define CLC_BAD      0x00 // trash
 #define CLC_NOP      0x01 // does nothing
@@ -70,5 +71,7 @@ u32 netmsgSvcChrDamageWrite(struct netbuf *dst, struct chrdata *chr, f32 damage,
 u32 netmsgSvcChrDamageRead(struct netbuf *src, struct netclient *srccl);
 u32 netmsgSvcChrDisarmWrite(struct netbuf *dst, struct chrdata *chr, struct prop *attacker, u8 weaponnum, f32 wpndamage, struct coord *wpnpos);
 u32 netmsgSvcChrDisarmRead(struct netbuf *src, struct netclient *srccl);
+u32 netmsgSvcChrPositionsWrite(struct netbuf *dst);
+u32 netmsgSvcChrPositionsRead(struct netbuf *src, struct netclient *srccl);
 
 #endif

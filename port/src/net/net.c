@@ -765,6 +765,7 @@ static void netClientEvReceive(struct netclient *cl)
 			case SVC_PROP_LIFT: rc = netmsgSvcPropLiftRead(&cl->in, cl); break;
 			case SVC_CHR_DAMAGE: rc = netmsgSvcChrDamageRead(&cl->in, cl); break;
 			case SVC_CHR_DISARM: rc = netmsgSvcChrDisarmRead(&cl->in, cl); break;
+			case SVC_CHR_POSITIONS: rc = netmsgSvcChrPositionsRead(&cl->in, cl); break;
 			default:
 				rc = 1;
 				break;
@@ -905,6 +906,7 @@ void netEndFrame(void)
 			if (g_NetNextUpdate <= g_NetTick) {
 				g_NetNextUpdate = g_NetTick + g_NetServerUpdateRate;
 			}
+			netmsgSvcChrPositionsWrite(&g_NetMsg);
 		}
 	}
 
