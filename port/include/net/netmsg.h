@@ -24,6 +24,9 @@
 #define SVC_CHR_DAMAGE     0x42 // chr was damaged
 #define SVC_CHR_DISARM     0x43 // chr's weapons were dropped
 #define SVC_CHR_POSITIONS  0x44 // chr (bot/AI) positions, server authoritative
+#define SVC_CHR_SPAWN      0x45 // bot spawned or respawned, server authoritative
+#define SVC_PROP_FLAGS     0x50 // obj->flags changed by AI script or damage
+#define SVC_ROOM_LIGHTS    0x51 // room light state changed
 
 #define CLC_BAD      0x00 // trash
 #define CLC_NOP      0x01 // does nothing
@@ -73,5 +76,11 @@ u32 netmsgSvcChrDisarmWrite(struct netbuf *dst, struct chrdata *chr, struct prop
 u32 netmsgSvcChrDisarmRead(struct netbuf *src, struct netclient *srccl);
 u32 netmsgSvcChrPositionsWrite(struct netbuf *dst);
 u32 netmsgSvcChrPositionsRead(struct netbuf *src, struct netclient *srccl);
+u32 netmsgSvcChrSpawnWrite(struct netbuf *dst, struct chrdata *chr, struct coord *pos, RoomNum *rooms, f32 angle, u8 respawning);
+u32 netmsgSvcChrSpawnRead(struct netbuf *src, struct netclient *srccl);
+u32 netmsgSvcPropFlagsWrite(struct netbuf *dst, struct prop *prop);
+u32 netmsgSvcPropFlagsRead(struct netbuf *src, struct netclient *srccl);
+u32 netmsgSvcRoomLightsWrite(struct netbuf *dst, s32 roomnum, s32 operation, u8 br_to, u8 br_from, u8 duration60);
+u32 netmsgSvcRoomLightsRead(struct netbuf *src, struct netclient *srccl);
 
 #endif

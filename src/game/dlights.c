@@ -29,6 +29,10 @@
 #include "data.h"
 #include "types.h"
 #include "platform.h"
+#ifndef PLATFORM_N64
+#include "net/net.h"
+#include "net/netmsg.h"
+#endif
 
 const char var7f1a78e0[] = "LIGHTS : Hit occured on light %d in room %d\n";
 const char var7f1a7910[] = "L2(%d) -> ";
@@ -931,6 +935,12 @@ void roomSetLightsOn(s32 roomnum, s32 enable)
 	}
 
 	g_Rooms[roomnum].flags |= ROOMFLAG_LIGHTS_DIRTY;
+
+#ifndef PLATFORM_N64
+	if (g_NetMode == NETMODE_SERVER) {
+		netmsgSvcRoomLightsWrite(&g_NetMsgRel, roomnum, enable ? 1 : 0, 0, 0, 0);
+	}
+#endif
 }
 
 /**
@@ -968,6 +978,12 @@ void roomSetLightOp(s32 roomnum, s32 operation, u8 br_to, u8 br_from, u8 duratio
 		case LIGHTOP_HIGHLIGHT:
 			break;
 		}
+
+#ifndef PLATFORM_N64
+		if (g_NetMode == NETMODE_SERVER) {
+			netmsgSvcRoomLightsWrite(&g_NetMsgRel, roomnum, operation, br_to, br_from, duration60);
+		}
+#endif
 	}
 }
 

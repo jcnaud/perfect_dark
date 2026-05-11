@@ -766,6 +766,9 @@ static void netClientEvReceive(struct netclient *cl)
 			case SVC_CHR_DAMAGE: rc = netmsgSvcChrDamageRead(&cl->in, cl); break;
 			case SVC_CHR_DISARM: rc = netmsgSvcChrDisarmRead(&cl->in, cl); break;
 			case SVC_CHR_POSITIONS: rc = netmsgSvcChrPositionsRead(&cl->in, cl); break;
+			case SVC_CHR_SPAWN:     rc = netmsgSvcChrSpawnRead(&cl->in, cl); break;
+			case SVC_PROP_FLAGS:    rc = netmsgSvcPropFlagsRead(&cl->in, cl); break;
+			case SVC_ROOM_LIGHTS:   rc = netmsgSvcRoomLightsRead(&cl->in, cl); break;
 			default:
 				rc = 1;
 				break;

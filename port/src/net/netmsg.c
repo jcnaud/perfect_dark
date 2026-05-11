@@ -9,6 +9,7 @@
 #include "game/mplayer/mplayer.h"
 #include "game/chr.h"
 #include "game/chraction.h"
+#include "game/bot.h"
 #include "game/prop.h"
 #include "game/propobj.h"
 #include "game/player.h"
@@ -28,6 +29,7 @@
 #include "net/net.h"
 #include "net/netbuf.h"
 #include "net/netmsg.h"
+#include "game/dlights.h"
 
 /* utils */
 
@@ -469,6 +471,25 @@ u32 netmsgSvcStageStartWrite(struct netbuf *dst)
 		netbufWriteU32(dst, g_Vars.props[i].syncid);
 	}
 
+	// send snapshot of all spawned bots so client can initialize them
+	s32 botcount = 0;
+	for (s32 i = 0; i < g_NumChrs; ++i) {
+		struct chrdata *chr = &g_ChrSlots[g_ChrIndexes[i]];
+		if (chr->prop && chr->prop->type == PROPTYPE_CHR && chr->aibot && chr->myaction != MA_NONE) {
+			++botcount;
+		}
+	}
+	netbufWriteU8(dst, (u8)botcount);
+	for (s32 i = 0; i < g_NumChrs; ++i) {
+		struct chrdata *chr = &g_ChrSlots[g_ChrIndexes[i]];
+		if (chr->prop && chr->prop->type == PROPTYPE_CHR && chr->aibot && chr->myaction != MA_NONE) {
+			netbufWriteS16(dst, g_Chrnums[i]);
+			netbufWriteCoord(dst, &chr->prop->pos);
+			netbufWriteRooms(dst, chr->prop->rooms, 8);
+			netbufWriteF32(dst, chr->aibot->lookangle);
+		}
+	}
+
 	return dst->error;
 }
 
@@ -610,6 +631,24 @@ u32 netmsgSvcStageStartRead(struct netbuf *src, struct netclient *srccl)
 	if (!src->error) {
 		g_NetNextSyncId = server_next_syncid;
 		sysLogPrintf(LOG_NOTE, "NET: applied server syncid table, next syncid: %u", g_NetNextSyncId);
+	}
+
+	// initialize bots from server snapshot
+	const u8 botcount = netbufReadU8(src);
+	sysLogPrintf(LOG_NOTE, "NET: applying bot spawn snapshot, count=%u", botcount);
+	for (u8 i = 0; i < botcount && !src->error; ++i) {
+		const s16 chrnum = netbufReadS16(src);
+		struct coord pos;
+		netbufReadCoord(src, &pos);
+		RoomNum rooms[8];
+		netbufReadRooms(src, rooms, 8);
+		const f32 angle = netbufReadF32(src);
+		struct chrdata *chr = chrFindByLiteralId(chrnum);
+		if (chr && chr->aibot) {
+			botSpawnAtPos(chr, &pos, rooms, angle, false);
+		} else {
+			sysLogPrintf(LOG_WARNING, "NET: bot snapshot: chrnum %d not found", chrnum);
+		}
 	}
 
 	return src->error;
@@ -1657,6 +1696,7 @@ u32 netmsgSvcChrPositionsWrite(struct netbuf *dst)
 			++count;
 		}
 	}
+
 	if (count == 0) {
 		return dst->error;
 	}
@@ -1673,10 +1713,23 @@ u32 netmsgSvcChrPositionsWrite(struct netbuf *dst)
 			} else if (chr->model) {
 				angle = modelGetChrRotY(chr->model);
 			}
+			u8 firing = 0;
+			if (chr->hidden & CHRHFLAG_FIRINGLEFT)  firing |= 1;
+			if (chr->hidden & CHRHFLAG_FIRINGRIGHT) firing |= 2;
+			s16 animnum = chr->model ? modelGetAnimNum(chr->model) : -1;
+			f32 animframe = chr->model ? modelGetCurAnimFrame(chr->model) : 0.f;
+			f32 animspeed = chr->model ? modelGetAbsAnimSpeed(chr->model) : 0.f;
+			u8 animflip = chr->model ? (u8)chr->model->anim->flip : 0;
 			netbufWriteS16(dst, g_Chrnums[i]);
 			netbufWriteCoord(dst, &chr->prop->pos);
 			netbufWriteF32(dst, angle);
 			netbufWriteF32(dst, chr->damage);
+			netbufWriteS8(dst, chr->actiontype);
+			netbufWriteU8(dst, firing);
+			netbufWriteS16(dst, animnum);
+			netbufWriteF32(dst, animframe);
+			netbufWriteF32(dst, animspeed);
+			netbufWriteU8(dst, animflip);
 		}
 	}
 
@@ -1693,6 +1746,12 @@ u32 netmsgSvcChrPositionsRead(struct netbuf *src, struct netclient *srccl)
 		netbufReadCoord(src, &pos);
 		const f32 angle = netbufReadF32(src);
 		const f32 damage = netbufReadF32(src);
+		const s8 actiontype = netbufReadS8(src);
+		const u8 firing = netbufReadU8(src);
+		const s16 animnum = netbufReadS16(src);
+		const f32 animframe = netbufReadF32(src);
+		const f32 animspeed = netbufReadF32(src);
+		const u8 animflip = netbufReadU8(src);
 
 		if (src->error) {
 			break;
@@ -1701,14 +1760,118 @@ u32 netmsgSvcChrPositionsRead(struct netbuf *src, struct netclient *srccl)
 		struct chrdata *chr = chrFindByLiteralId(chrnum);
 		if (chr && chr->prop) {
 			chr->prop->pos = pos;
+			if (chr->model) {
+				modelSetRootPosition(chr->model, &pos);
+				modelSetChrRotY(chr->model, angle);
+				// apply server animation state directly — no action tick logic
+				if (animnum >= 0) {
+					modelSetAnimation(chr->model, animnum, animflip, animframe, animspeed, 0);
+				}
+			}
 			if (chr->aibot) {
 				chr->aibot->lookangle = angle;
-			} else if (chr->model) {
-				modelSetChrRotY(chr->model, angle);
 			}
 			chr->damage = damage;
+			// sync actiontype so chrTickDead can run the fade-out on ACT_DEAD
+			chr->actiontype = actiontype;
+			// muzzle flash sync
+			chrSetFiring(chr, HAND_LEFT,  (firing & 1) != 0);
+			chrSetFiring(chr, HAND_RIGHT, (firing & 2) != 0);
 		}
 	}
 
+	return src->error;
+}
+
+u32 netmsgSvcChrSpawnWrite(struct netbuf *dst, struct chrdata *chr, struct coord *pos, RoomNum *rooms, f32 angle, u8 respawning)
+{
+	netbufWriteU8(dst, SVC_CHR_SPAWN);
+	netbufWriteS16(dst, chr->chrnum);
+	netbufWriteCoord(dst, pos);
+	netbufWriteRooms(dst, rooms, 8);
+	netbufWriteF32(dst, angle);
+	netbufWriteU8(dst, respawning);
+	return dst->error;
+}
+
+u32 netmsgSvcChrSpawnRead(struct netbuf *src, struct netclient *srccl)
+{
+	const s16 chrnum = netbufReadS16(src);
+	struct coord pos;
+	netbufReadCoord(src, &pos);
+	RoomNum rooms[8];
+	netbufReadRooms(src, rooms, 8);
+	const f32 angle = netbufReadF32(src);
+	const u8 respawning = netbufReadU8(src);
+
+	if (src->error) {
+		return src->error;
+	}
+
+	struct chrdata *chr = chrFindByLiteralId(chrnum);
+	if (chr && chr->aibot) {
+		botSpawnAtPos(chr, &pos, rooms, angle, respawning);
+	}
+
+	return src->error;
+}
+
+u32 netmsgSvcPropFlagsWrite(struct netbuf *dst, struct prop *prop)
+{
+	netbufWriteU8(dst, SVC_PROP_FLAGS);
+	netbufWriteU32(dst, prop->syncid);
+	netbufWriteU32(dst, prop->obj->flags);
+	return dst->error;
+}
+
+u32 netmsgSvcPropFlagsRead(struct netbuf *src, struct netclient *srccl)
+{
+	const u32 syncid = netbufReadU32(src);
+	const u32 flags = netbufReadU32(src);
+	if (src->error) {
+		return src->error;
+	}
+	struct prop *prop = NULL;
+	for (s32 i = 0; i < g_Vars.maxprops; ++i) {
+		if (g_Vars.props[i].syncid == syncid) {
+			prop = &g_Vars.props[i];
+			break;
+		}
+	}
+	if (prop && prop->obj) {
+		prop->obj->flags = flags;
+	}
+	return src->error;
+}
+
+u32 netmsgSvcRoomLightsWrite(struct netbuf *dst, s32 roomnum, s32 operation, u8 br_to, u8 br_from, u8 duration60)
+{
+	netbufWriteU8(dst, SVC_ROOM_LIGHTS);
+	netbufWriteS16(dst, (s16)roomnum);
+	netbufWriteU8(dst, (u8)operation);
+	if (operation > 1) {
+		netbufWriteU8(dst, br_to);
+		netbufWriteU8(dst, br_from);
+		netbufWriteU8(dst, duration60);
+	}
+	return dst->error;
+}
+
+u32 netmsgSvcRoomLightsRead(struct netbuf *src, struct netclient *srccl)
+{
+	const s16 roomnum = netbufReadS16(src);
+	const u8 operation = netbufReadU8(src);
+	if (operation > 1) {
+		const u8 br_to = netbufReadU8(src);
+		const u8 br_from = netbufReadU8(src);
+		const u8 duration60 = netbufReadU8(src);
+		if (!src->error) {
+			roomSetLightOp(roomnum, operation, br_to, br_from, duration60);
+		}
+	} else {
+		if (!src->error) {
+			roomSetLightsOn(roomnum, operation == 1);
+		}
+	}
 	return src->error;
 }

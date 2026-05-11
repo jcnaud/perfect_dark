@@ -9,6 +9,7 @@ bool botroomFindPos(RoomNum room, struct coord *pos, f32 *angleptr, s32 *padnump
 bool botIsDizzy(struct chrdata *chr);
 void botReset(struct chrdata *chr, u8 respawning);
 void botSpawn(struct chrdata *chr, u8 full);
+void botSpawnAtPos(struct chrdata *chr, struct coord *pos, RoomNum *rooms, f32 angle, u8 respawning);
 void botSpawnAll(void);
 u32 add87654321(u32 value);
 u32 botPickupProp(struct prop *prop, struct chrdata *chr);

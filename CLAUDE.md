@@ -2,6 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Code navigation
+
+`cscope` is installed and indexed (`cscope.out` at repo root). Use it instead of recursive grep:
+
+```sh
+cscope -d -L -1 <symbol>   # find definition
+cscope -d -L -3 <symbol>   # find all callers
+cscope -d -L -0 <symbol>   # find all occurrences
+```
+
+Rebuild the index after significant changes: `cscope -Rb`
+
 ## Build
 
 Requires GCC/G++ (10+). **Visual Studio is not supported.** SDL2, zlib, and OpenGL must be available.

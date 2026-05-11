@@ -33,6 +33,10 @@
 #include "lib/anim.h"
 #include "data.h"
 #include "types.h"
+#ifndef PLATFORM_N64
+#include "net/net.h"
+#include "net/netmsg.h"
+#endif
 
 #define PICKUPCRITERIA_DEFAULT  0
 #define PICKUPCRITERIA_CRITICAL 1
@@ -224,12 +228,52 @@ void botReset(struct chrdata *chr, u8 respawning)
 	}
 }
 
+void botSpawnAtPos(struct chrdata *chr, struct coord *pos, RoomNum *rooms, f32 angle, u8 respawning)
+{
+	struct aibot *aibot = chr->aibot;
+
+	if (aibot) {
+		botReset(chr, respawning);
+		splatResetChr(chr);
+		chr->hidden |= CHRHFLAG_WARPONSCREEN;
+		chrMoveToPos(chr, pos, rooms, angle, true);
+		chr->aibot->roty = modelGetChrRotY(chr->model);
+		chr->aibot->angleoffset = 0;
+		chr->aibot->speedtheta = 0;
+		chr->aibot->lookangle = modelGetChrRotY(chr->model);
+		chr->aibot->moveratex = 0;
+		chr->aibot->moveratey = 0;
+		func0f02e9a0(chr, 0);
+
+#ifndef PLATFORM_N64
+		// only create weapon props on the server — on the client, weapon props
+		// are received via SVC_PROP_SPAWN; creating them locally would corrupt
+		// the syncid table by reusing free prop slots that already carry server syncids
+		if (g_NetMode != NETMODE_CLIENT
+				&& (g_MpSetup.options & MPOPTION_SPAWNWITHWEAPON)
+				&& g_MpSetup.weapons[0] != MPWEAPON_NONE
+				&& g_MpSetup.weapons[0] != MPWEAPON_DISABLED
+				&& g_MpSetup.weapons[0] != MPWEAPON_SHIELD) {
+			struct mpweapon *mpweapon = &g_MpWeapons[g_MpSetup.weapons[0]];
+			botinvGiveSingleWeapon(chr, mpweapon->weaponnum);
+			const s32 ammotype = (g_MpSetup.weapons[0] == MPWEAPON_COMBATBOOST) ? AMMOTYPE_BOOST : mpweapon->priammotype;
+			if (ammotype) {
+				s32 startammo = mpweapon->priammoqty / 2;
+				if (startammo == 0) {
+					startammo = 1;
+				}
+				botactGiveAmmoByType(aibot, ammotype, startammo);
+			}
+			botinvSwitchToWeapon(chr, mpweapon->weaponnum, FUNC_PRIMARY);
+		}
+#endif
+	}
+}
+
 void botSpawn(struct chrdata *chr, u8 respawning)
 {
-	f32 thing;
 	struct prop *prop;
 	struct defaultobj *obj;
-	struct aibot *aibot = chr->aibot;
 	struct coord pos;
 	RoomNum rooms[8];
 
@@ -247,36 +291,12 @@ void botSpawn(struct chrdata *chr, u8 respawning)
 		}
 	}
 
-	if (aibot) {
-		botReset(chr, respawning);
-		splatResetChr(chr);
-		thing = scenarioChooseSpawnLocation(chr->radius, &pos, rooms, chr->prop);
-		chr->hidden |= CHRHFLAG_WARPONSCREEN;
-		chrMoveToPos(chr, &pos, rooms, thing, true);
-		chr->aibot->roty = modelGetChrRotY(chr->model);
-		chr->aibot->angleoffset = 0;
-		chr->aibot->speedtheta = 0;
-		chr->aibot->lookangle = modelGetChrRotY(chr->model);
-		chr->aibot->moveratex = 0;
-		chr->aibot->moveratey = 0;
-		func0f02e9a0(chr, 0);
-
+	if (chr->aibot) {
+		f32 angle = scenarioChooseSpawnLocation(chr->radius, &pos, rooms, chr->prop);
+		botSpawnAtPos(chr, &pos, rooms, angle, respawning);
 #ifndef PLATFORM_N64
-		if ((g_MpSetup.options & MPOPTION_SPAWNWITHWEAPON)
-				&& g_MpSetup.weapons[0] != MPWEAPON_NONE
-				&& g_MpSetup.weapons[0] != MPWEAPON_DISABLED
-				&& g_MpSetup.weapons[0] != MPWEAPON_SHIELD) {
-			struct mpweapon *mpweapon = &g_MpWeapons[g_MpSetup.weapons[0]];
-			botinvGiveSingleWeapon(chr, mpweapon->weaponnum);
-			const s32 ammotype = (g_MpSetup.weapons[0] == MPWEAPON_COMBATBOOST) ? AMMOTYPE_BOOST : mpweapon->priammotype;
-			if (ammotype) {
-				s32 startammo = mpweapon->priammoqty / 2;
-				if (startammo == 0) {
-					startammo = 1;
-				}
-				botactGiveAmmoByType(aibot, ammotype, startammo);
-			}
-			botinvSwitchToWeapon(chr, mpweapon->weaponnum, FUNC_PRIMARY);
+		if (g_NetMode == NETMODE_SERVER) {
+			netmsgSvcChrSpawnWrite(&g_NetMsgRel, chr, &pos, rooms, angle, respawning);
 		}
 #endif
 	}

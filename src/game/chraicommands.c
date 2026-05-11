@@ -54,6 +54,8 @@
 
 #ifndef PLATFORM_N64
 #include "game/mplayer/mplayer.h"
+#include "net/net.h"
+#include "net/netmsg.h"
 #endif
 
 /**
@@ -3587,6 +3589,11 @@ bool aiSetObjFlag(void)
 
 	if (obj && obj->prop) {
 		obj->flags |= flags;
+#ifndef PLATFORM_N64
+		if (g_NetMode == NETMODE_SERVER && obj->prop->syncid) {
+			netmsgSvcPropFlagsWrite(&g_NetMsgRel, obj->prop);
+		}
+#endif
 	}
 
 	g_Vars.aioffset += 7;
@@ -3605,6 +3612,11 @@ bool aiUnsetObjFlag(void)
 
 	if (obj && obj->prop) {
 		obj->flags &= ~flags;
+#ifndef PLATFORM_N64
+		if (g_NetMode == NETMODE_SERVER && obj->prop->syncid) {
+			netmsgSvcPropFlagsWrite(&g_NetMsgRel, obj->prop);
+		}
+#endif
 	}
 
 	g_Vars.aioffset += 7;

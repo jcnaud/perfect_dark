@@ -8279,8 +8279,14 @@ void chrTickDead(struct chrdata *chr)
 			chr->fadealpha = 0;
 
 			if (aibot) {
+#ifndef PLATFORM_N64
+				if (g_NetMode != NETMODE_CLIENT)
+#endif
 				botSpawn(chr, true);
 			} else {
+#ifndef PLATFORM_N64
+				if (g_NetMode != NETMODE_CLIENT)
+#endif
 				chr->hidden |= CHRHFLAG_DELETING;
 			}
 		} else {
@@ -13430,6 +13436,17 @@ void chraTick(struct chrdata *chr)
 		}
 
 		if (chr->prop) {
+#ifndef PLATFORM_N64
+			// on the client, chr animation is driven by model anim state
+			// received from the server (SVC_CHR_POSITIONS); skip all action
+			// tick functions to avoid crashes from uninitialised path/action
+			// state — only allow chrTickDead for the fade-out / prop deletion
+			if (g_NetMode == NETMODE_CLIENT) {
+				if (chr->actiontype == ACT_DEAD) {
+					chrTickDead(chr);
+				}
+			} else
+#endif
 			if (g_Vars.in_cutscene) {
 				switch (chr->actiontype) {
 				case ACT_ANIM:   chrTickAnim(chr);   break;
